@@ -1,18 +1,23 @@
 #!/bin/bash
+
 dir=$(dirname "$0")
 pipe=/tmp/aplayer-pipe
 
 function usage() {
-	echo "Usage:"
+	echo "APlayer - Version 1.0.0"
+	echo "https://github.com/Fingarde/AudioPlayer"
 	echo ""
-	echo "download <url> <name>"
+	echo "download <url> <name>: Download a youtube player and save it to ~/Music/<name>"
 	echo ""
-	echo "play <playlist>"
-	echo "next"
-	echo "prev"
-	echo "seek"
-	echo "quit"
-	echo "shuffle"
+	echo "list: Display all playlists"
+	echo ""
+	echo "play <playlist>: Play a playlist"
+	echo "next: Skip current song"
+	echo "prev: Go to previous song"
+	echo "seek min:sec|time to add/remove: Move cursor in current song"
+	echo "shuffle: Shuffle current playlist"
+	echo ""
+	echo "quit: Close aplayer"
 
 	exit 1
 }
@@ -92,5 +97,8 @@ case "$1" in
 		cat /tmp/.list | shuf > "$dir"/.list
 
 		mplayer -slave -input file="$pipe" -idle -volume "$volume" -playlist "$dir"/.list &> /dev/null &
+		;;
+	"list")
+		ls ~/Music 
 		;;
 esac
