@@ -1,0 +1,96 @@
+#!/bin/bash
+dir=$(dirname "$0")
+pipe=/tmp/aplayer-pipe
+
+function usage() {
+	echo "Usage:"
+	echo ""
+	echo "download <url> <name>"
+	echo ""
+	echo "play <playlist>"
+	echo "next"
+	echo "prev"
+	echo "seek"
+	echo "quit"
+	echo "shuffle"
+
+	exit 1
+}
+
+function createConfig() {
+	printf "volume: 50" > "$dir/config"
+}
+
+function set() {
+	sed -i "s/$1: .*/$1: $2/g" "$dir/config" 
+}
+
+[ -x /usr/bin/mplayer ] || {
+	print "Missing mplayer"
+	echo "apt install mplayer"
+}
+
+[ -x /usr/local/bin/youtube-dl ] || {
+	print "Missing mplayer"
+	echo "curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl"
+	echo "chmod a+rx /usr/local/bin/youtube-dl"
+}
+
+[ $# -eq 0 ] && usage
+
+[ -e "$dir/config" ] || createConfig
+volume=$(cat "$dir/config" | tr -d " " | grep "volume:" | cut -d ":" -f 2)
+[ -e "$pipe" ] || mkfifo "$pipe"
+
+case "$1" in
+	"download")
+		shift
+		[ $# -lt 2 ] && usage
+		youtube-dl -i -f 'bestaudio[ext=m4a]' --yes-playlist -o ~/Music/"$2"/"%(title)s-%(id)s.%(ext)s" -x "$1" | egrep -v "youtube|ffmpeg|Destination|100%|dashsegments"
+		;;
+	"play")
+		shift 
+		[ $# -eq 0 ] && usage
+		lsof "$pipe" | grep " 5u " > /dev/null && echo "quit" > "$pipe"
+		find ~/Music/"$1" -type f -iname "*.m4a" > "$dir"/.list
+		mplayer -slave -input file="$pipe" -idle -volume "$volume" -playlist "$dir"/.list &> /dev/null &
+		;;	
+	"volume")
+		shift 	
+		[ $# -eq 0 ] && usage
+		echo "$1" | egrep "[+-]" > /dev/null && volume=$(( "$volume$1" )) || volume=$(( "$1"+1 ))
+		set "volume" "$volume"
+		echo "volume $volume 1" > "$pipe"
+		;;
+	"next")
+		shift 	
+		echo "pt_step 1" > "$pipe"
+		;;	
+	"prev")
+		shift 	
+		echo "pt_step -1" > "$pipe"
+		;;
+	"pause")
+		shift 	
+		echo "pause" > "$pipe"
+		;;
+	"seek")
+		shift 
+		[ $# -eq 0 ] && usage
+		mode="0"
+		time="$1"
+		echo "$1" | grep ":" > /dev/null && mode=2 && time=$(( $( echo $1 | cut -d ":" -f 1 ) * 60 + $( echo $1 | cut -d ":" -f 2 ) ))
+		echo "seek $time $mode" > "$pipe"
+		;;
+	"quit")
+		shift 	
+		echo "quit" > "$pipe"
+		;;	
+	"shuffle")
+		lsof "$pipe" | grep " 5u " > /dev/null && echo "quit" > "$pipe"
+		mv "$dir"/.list /tmp/.list
+		cat /tmp/.list | shuf > "$dir"/.list
+
+		mplayer -slave -input file="$pipe" -idle -volume "$volume" -playlist "$dir"/.list &> /dev/null &
+		;;
+esac
