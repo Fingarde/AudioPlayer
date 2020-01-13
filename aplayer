@@ -58,7 +58,7 @@ case "$1" in
 		[ $# -eq 0 ] && usage
 		lsof "$pipe" | grep " 5u " > /dev/null && echo "quit" > "$pipe"
 		find ~/Music/"$1" -type f -iname "*.m4a" > "$dir"/.list
-		mplayer -slave -input file="$pipe" -idle -volume "$volume" -playlist "$dir"/.list &> /dev/null &
+		mplayer -slave -input file="$pipe" -idle -playlist "$dir"/.list &> /dev/null &
 		;;	
 	"volume")
 		shift 	
@@ -96,7 +96,7 @@ case "$1" in
 		mv "$dir"/.list /tmp/.list
 		cat /tmp/.list | shuf > "$dir"/.list
 
-		mplayer -slave -input file="$pipe" -idle -volume "$volume" -playlist "$dir"/.list &> /dev/null &
+		mplayer -slave -input file="$pipe" -idle -playlist "$dir"/.list &> /dev/null &
 		;;
 	"list")
 		ls ~/Music 
