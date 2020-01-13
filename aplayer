@@ -57,7 +57,7 @@ case "$1" in
 		shift 
 		[ $# -eq 0 ] && usage
 		lsof "$pipe" | grep " 5u " > /dev/null && echo "quit" > "$pipe"
-		find ~/Music/"$1" -type f -iname "*.m4a" > "$dir"/.list
+		find ~/Music/"$1" -type f -regex ".*\.\(mp3\|m4a\|ogg\|flv\|opus\)" > "$dir"/.list
 		mplayer -slave -input file="$pipe" -idle -playlist "$dir"/.list &> /dev/null &
 		;;	
 	"volume")
