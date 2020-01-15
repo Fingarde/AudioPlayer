@@ -93,6 +93,10 @@ case "$1" in
 		[ $# -eq 0 ] && usage
 
 		echo "$1" | egrep "[+-]" > /dev/null && volume=$(( "$volume$1" )) || volume=$(( "$1"+1 ))
+
+		[ $volume -gt 100 ] && volume=100
+		[ $volume -lt 0 ] && volume=0
+
 		set "volume" "$volume"
 
 		send "volume $volume 1"
