@@ -1,11 +1,15 @@
 #!/bin/bash
 
 dir=$(dirname "$0")
-pipe=/tmp/aplayer-pipe
+pipeIN=/tmp/aplayer-pipe-in
+pipeOUT=/tmp/aplayer-pipe-out
 
 function usage() {
 	echo "APlayer - Version 1.0.0"
 	echo "https://github.com/Fingarde/AudioPlayer"
+	echo ""
+	echo "now: Get current song name"
+	echo "url: Get url of current song"
 	echo ""
 	echo "download <url> <name>: Download a youtube player and save it to ~/Music/<name>"
 	echo ""
@@ -18,6 +22,7 @@ function usage() {
 	echo "shuffle: Shuffle current playlist"
 	echo ""
 	echo "quit: Close aplayer"
+	echo "kill: Kill all aplayer"
 
 	exit 1
 }
@@ -31,21 +36,31 @@ function set() {
 }
 
 [ -x /usr/bin/mplayer ] || {
-	print "Missing mplayer"
+	echo "Missing mplayer"
 	echo "apt install mplayer"
+	exit 1
+}
+
+[ -x /usr/bin/ffmpeg ] || {
+	echo "Missing ffmpeg"
+	echo "apt install ffmpeg"
+	exit 1
 }
 
 [ -x /usr/local/bin/youtube-dl ] || {
-	print "Missing mplayer"
+	echo "Missing mplayer"
 	echo "curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl"
-	echo "chmod a+rx /usr/local/bin/youtube-dl"
+	echo "chmod a+rx /usr/local/bin/youtube-dl"
+	exit 1
 }
 
 [ $# -eq 0 ] && usage
 
 [ -e "$dir/config" ] || createConfig
 volume=$(cat "$dir/config" | tr -d " " | grep "volume:" | cut -d ":" -f 2)
-[ -e "$pipe" ] || mkfifo "$pipe"
+
+[ -e "$pipeIN" ] || mkfifo "$pipeIN"
+[ -e "$pipeOUT" ] || touch "$pipeOUT"
 
 case "$1" in
 	"download")
@@ -56,28 +71,29 @@ case "$1" in
 	"play")
 		shift 
 		[ $# -eq 0 ] && usage
-		lsof "$pipe" | grep " 5u " > /dev/null && echo "quit" > "$pipe"
-		find ~/Music/"$1" -type f -regex ".*\.\(mp3\|m4a\|ogg\|flv\|opus\)" > "$dir"/.list
-		mplayer -slave -input file="$pipe" -idle -playlist "$dir"/.list &> /dev/null &
+		
+		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
+			echo "quit" > "$pipeIN"
+		done
+		
+		find $(find ~/Music -type d -iname "$1*" | head -1) -type f -regex ".*\.\(mp3\|m4a\|ogg\|flv\|opus\)" > /tmp/.list
+		mplayer -slave -input file="$pipeIN" -idle -playlist /tmp/.list 2> /dev/null | grep --line-buffered "Playing" > "$pipeOUT"  &
 		;;	
 	"volume")
 		shift 	
 		[ $# -eq 0 ] && usage
 		echo "$1" | egrep "[+-]" > /dev/null && volume=$(( "$volume$1" )) || volume=$(( "$1"+1 ))
 		set "volume" "$volume"
-		echo "volume $volume 1" > "$pipe"
+		echo "volume $volume 1" > "$pipeIN"
 		;;
 	"next")
-		shift 	
-		echo "pt_step 1" > "$pipe"
+		echo "pt_step 1" > "$pipeIN"
 		;;	
 	"prev")
-		shift 	
-		echo "pt_step -1" > "$pipe"
+		echo "pt_step -1" > "$pipeIN"
 		;;
-	"pause")
-		shift 	
-		echo "pause" > "$pipe"
+	"pause")	
+		echo "pause" > "$pipeIN"
 		;;
 	"seek")
 		shift 
@@ -85,18 +101,30 @@ case "$1" in
 		mode="0"
 		time="$1"
 		echo "$1" | grep ":" > /dev/null && mode=2 && time=$(( $( echo $1 | cut -d ":" -f 1 ) * 60 + $( echo $1 | cut -d ":" -f 2 ) ))
-		echo "seek $time $mode" > "$pipe"
+		echo "seek $time $mode" > "$pipeIN"
 		;;
 	"quit")
-		shift 	
-		echo "quit" > "$pipe"
+		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
+			echo "quit" > "$pipeIN"
+		done
+		;;
+	"kill")
+		ps aux | grep "mplayer -slave -input file=/tmp/aplayer-pipe-in" | grep -v "grep" | tr -s " " | cut -d " " -f 2 | xargs -i kill -9 {}
 		;;	
+	"now")
+		tail /tmp/aplayer-pipe-out | tac | head -n 1 | rev | cut -d "/" -f 1 | rev | sed "s/-.\{11\}\..\{,5\}\.//g"
+		;;	
+	"url")
+		printf "https://www.youtube.com/watch\?v="; tail /tmp/aplayer-pipe-out | tac | head -n 1 | rev | cut -d "/" -f 1 | rev | sed -e "s/.*-\(.\{11\}\)\..\{,5\}\./\1/g" 
+		;;		
 	"shuffle")
-		lsof "$pipe" | grep " 5u " > /dev/null && echo "quit" > "$pipe"
-		mv "$dir"/.list /tmp/.list
-		cat /tmp/.list | shuf > "$dir"/.list
+		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
+			echo "quit" > "$pipeIN"
+		done
+		mv /tmp/.list /tmp/.oldlist
+		cat /tmp/.oldlist | shuf > /tmp/.list
 
-		mplayer -slave -input file="$pipe" -idle -playlist "$dir"/.list &> /dev/null &
+		mplayer -slave -input file="$pipeIN" -idle -playlist /tmp/.list 2> /dev/null | grep --line-buffered "Playing" > "$pipeOUT"  &
 		;;
 	"list")
 		ls ~/Music 
