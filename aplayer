@@ -35,6 +35,15 @@ function set() {
 	sed -i "s/$1: .*/$1: $2/g" "$dir/config" 
 }
 
+function send() {
+	lsof "$pipeIN" | grep " 5u " > /dev/null && echo "$@" > "$pipeIN"
+}
+
+function play() {
+	mplayer -slave -input file="$pipeIN" -idle -playlist /tmp/.list 2> /dev/null | grep --line-buffered "Playing" > "$pipeOUT"  &
+}
+
+
 [ -x /usr/bin/mplayer ] || {
 	echo "Missing mplayer"
 	echo "apt install mplayer"
@@ -73,12 +82,11 @@ case "$1" in
 		shift 
 		[ $# -eq 0 ] && usage
 		
-		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
-			echo "quit" > "$pipeIN"
-		done
+		send "quit"
 		
 		find $(find ~/Music -type d -iname "$1*" | head -1) -type f -regex ".*\.\(mp3\|m4a\|ogg\|flv\|opus\)" > /tmp/.list
-		mplayer -slave -input file="$pipeIN" -idle -playlist /tmp/.list 2> /dev/null | grep --line-buffered "Playing" > "$pipeOUT"  &
+		
+		play
 		;;	
 	"volume")
 		shift 	
@@ -87,16 +95,16 @@ case "$1" in
 		echo "$1" | egrep "[+-]" > /dev/null && volume=$(( "$volume$1" )) || volume=$(( "$1"+1 ))
 		set "volume" "$volume"
 
-		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "volume $volume 1" > "$pipeIN"
+		send "volume $volume 1"
 		;;
 	"next")
-		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "pt_step 1" > "$pipeIN"
+		send "pt_step 1"
 		;;	
 	"prev")
-		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "pt_step -1" > "$pipeIN"
+		send "pt_step -1"
 		;;
 	"pause")	
-		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "pause" > "$pipeIN"
+		send "pause"
 		;;
 	"seek")
 		shift 
@@ -106,11 +114,11 @@ case "$1" in
 		time="$1"
 
 		echo "$1" | grep ":" > /dev/null && mode=2 && time=$(( $( echo $1 | cut -d ":" -f 1 ) * 60 + $( echo $1 | cut -d ":" -f 2 ) ))
-		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "seek $time $mode" > "$pipeIN"
+		send "seek $time $mode"
 		;;
 	"quit")
 		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
-			echo "quit" > "$pipeIN"
+			send "quit"
 		done
 		;;
 	"kill")
@@ -120,17 +128,16 @@ case "$1" in
 		tail /tmp/aplayer-pipe-out | tac | head -n 1 | rev | cut -d "/" -f 1 | rev | sed "s/-.\{11\}\..\{,5\}\.//g"
 		;;	
 	"url")
-		printf "https://www.youtube.com/watch\?v="; tail /tmp/aplayer-pipe-out | tac | head -n 1 | rev | cut -d "/" -f 1 | rev | sed -e "s/.*-\(.\{11\}\)\..\{,5\}\./\1/g" 
+		printf "https://www.youtube.com/watch\?v="
+		tail /tmp/aplayer-pipe-out | tac | head -n 1 | rev | cut -d "/" -f 1 | rev | sed -e "s/.*-\(.\{11\}\)\..\{,5\}\./\1/g" 
 		;;		
 	"shuffle")
-		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
-			echo "quit" > "$pipeIN"
-		done
-		
+		send "quit"
+	
 		mv /tmp/.list /tmp/.oldlist
 		cat /tmp/.oldlist | shuf > /tmp/.list
 
-		mplayer -slave -input file="$pipeIN" -idle -playlist /tmp/.list 2> /dev/null | grep --line-buffered "Playing" > "$pipeOUT"  &
+		play
 		;;
 	"list")
 		ls ~/Music 
