@@ -66,6 +66,7 @@ case "$1" in
 	"download")
 		shift
 		[ $# -lt 2 ] && usage
+
 		youtube-dl -i -f 'bestaudio[ext=m4a]' --yes-playlist -o ~/Music/"$2"/"%(title)s-%(id)s.%(ext)s" -x "$1" | egrep -v "youtube|ffmpeg|Destination|100%|dashsegments"
 		;;
 	"play")
@@ -82,26 +83,30 @@ case "$1" in
 	"volume")
 		shift 	
 		[ $# -eq 0 ] && usage
+
 		echo "$1" | egrep "[+-]" > /dev/null && volume=$(( "$volume$1" )) || volume=$(( "$1"+1 ))
 		set "volume" "$volume"
-		echo "volume $volume 1" > "$pipeIN"
+
+		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "volume $volume 1" > "$pipeIN"
 		;;
 	"next")
-		echo "pt_step 1" > "$pipeIN"
+		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "pt_step 1" > "$pipeIN"
 		;;	
 	"prev")
-		echo "pt_step -1" > "$pipeIN"
+		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "pt_step -1" > "$pipeIN"
 		;;
 	"pause")	
-		echo "pause" > "$pipeIN"
+		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "pause" > "$pipeIN"
 		;;
 	"seek")
 		shift 
 		[ $# -eq 0 ] && usage
+
 		mode="0"
 		time="$1"
+
 		echo "$1" | grep ":" > /dev/null && mode=2 && time=$(( $( echo $1 | cut -d ":" -f 1 ) * 60 + $( echo $1 | cut -d ":" -f 2 ) ))
-		echo "seek $time $mode" > "$pipeIN"
+		lsof "$pipeIN" | grep " 5u " > /dev/null && echo "seek $time $mode" > "$pipeIN"
 		;;
 	"quit")
 		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
@@ -121,6 +126,7 @@ case "$1" in
 		while lsof "$pipeIN" | grep " 5u " > /dev/null; do
 			echo "quit" > "$pipeIN"
 		done
+		
 		mv /tmp/.list /tmp/.oldlist
 		cat /tmp/.oldlist | shuf > /tmp/.list
 
